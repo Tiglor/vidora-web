@@ -1,0 +1,57 @@
+:root {
+  --vp-pink: #fb7299;
+  --vp-pink-dark: #e85a82;
+  --vp-blue: #00aeec;
+  --vp-text: #18191c;
+  --vp-text-2: #61666d;
+  --vp-bg: #f4f5f7;
+  --vp-card: #ffffff;
+  --vp-border: #e3e5e7;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--vp-bg);
+  color: var(--vp-text);
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-size: 14px;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+.text-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.text-2-line {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.btn-pink {
+  background: var(--vp-pink);
+  border-color: var(--vp-pink);
+}
+.btn-pink:hover {
+  background: var(--vp-pink-dark);
+  border-color: var(--vp-pink-dark);
+}

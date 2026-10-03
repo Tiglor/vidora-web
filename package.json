@@ -1,0 +1,25 @@
+{
+  "name": "vidora-web",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "视频播放平台 Web 端（参考 B 站 / 腾讯视频 / 爱奇艺 版面，Vue3 + Vite + Element Plus）",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --host"
+  },
+  "dependencies": {
+    "axios": "^1.7.7",
+    "element-plus": "^2.8.4",
+    "@element-plus/icons-vue": "^2.3.1",
+    "hls.js": "^1.5.15",
+    "pinia": "^2.2.4",
+    "vue": "^3.5.12",
+    "vue-router": "^4.4.5"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.1.4",
+    "vite": "^5.4.8"
+  }
+}
