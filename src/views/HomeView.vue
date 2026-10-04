@@ -78,6 +78,11 @@ async function fetchList() {
     const page = await listVideos(params)
     videos.value = page.records || []
     total.value = page.total || 0
+  } catch (e) {
+    // 接口异常（如未登录、网络错误）时不抛出未处理的 Promise rejection，
+    // 由 request 拦截器统一提示；这里兜底清空列表
+    videos.value = []
+    total.value = 0
   } finally {
     loading.value = false
   }

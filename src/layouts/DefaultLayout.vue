@@ -18,16 +18,20 @@
         </nav>
 
         <div class="search-box">
-          <el-input
+          <el-autocomplete
             v-model="keyword"
+            class="search-input"
             placeholder="搜索你感兴趣的视频"
             clearable
+            value-key="keyword"
+            :fetch-suggestions="querySuggests"
             @keyup.enter="doSearch"
+            @select="onSelectSuggest"
           >
             <template #prefix>
               <el-icon><Search /></el-icon>
             </template>
-          </el-input>
+          </el-autocomplete>
           <el-button class="btn-pink search-btn" @click="doSearch">搜索</el-button>
         </div>
 
@@ -77,11 +81,28 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/store/user'
+import { getSuggests } from '@/api/search'
 import { ElMessageBox } from 'element-plus'
 
 const router = useRouter()
 const userStore = useUserStore()
 const keyword = ref('')
+
+// 搜索联想词接口已在网关匿名放行，访客也能使用
+async function querySuggests(queryString, cb) {
+  try {
+    // 空前缀走后端「热门词」那一路（整份进 Redis），有前缀才查库
+    const list = await getSuggests({ prefix: queryString || undefined, limit: 10 })
+    cb(list || [])
+  } catch (e) {
+    cb([])
+  }
+}
+
+function onSelectSuggest(item) {
+  keyword.value = item.keyword
+  doSearch()
+}
 
 function goHome() {
   router.push('/')
@@ -175,6 +196,11 @@ function onCommand(cmd) {
   gap: 8px;
   flex: 1;
   max-width: 420px;
+}
+/* el-autocomplete 的根是 inline-block，不像 el-input 自带 width:100%，得自己撑开 */
+.search-input {
+  flex: 1;
+  min-width: 0;
 }
 .search-btn {
   color: #fff;

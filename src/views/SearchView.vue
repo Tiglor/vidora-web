@@ -16,8 +16,11 @@ import { ref, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import VideoCard from '@/components/VideoCard.vue'
 import { listVideos } from '@/api/video'
+import { recordSearch } from '@/api/search'
+import { useUserStore } from '@/store/user'
 
 const route = useRoute()
+const userStore = useUserStore()
 const keyword = ref(route.query.keyword || '')
 const videos = ref([])
 const total = ref(0)
@@ -29,9 +32,21 @@ async function fetchList() {
     const page = await listVideos({ current: 1, size: 24, keyword: keyword.value })
     videos.value = page.records || []
     total.value = page.total || 0
+    report()
+  } catch (e) {
+    videos.value = []
+    total.value = 0
   } finally {
     loading.value = false
   }
+}
+
+// 检索本身还没接 ES，全站词频和我的搜索历史都靠调用方回报这一次结果。
+// 这个接口要求登录，而匿名调用会拿到无 body 的 401、被拦截器直接踹去登录页，
+// 所以未登录就静默跳过；回报失败也不该影响搜索结果的展示。
+function report() {
+  if (!userStore.isLoggedIn || !keyword.value) return
+  recordSearch({ keyword: keyword.value, resultCount: total.value }).catch(() => {})
 }
 
 onMounted(fetchList)
