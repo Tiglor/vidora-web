@@ -1,12 +1,33 @@
+/*
+ * 默认主题：浅蓝。
+ *
+ * 这一组是「兜底色」——<html> 上 data-theme 缺失、为空、或是一个本项目不认识的 key 时，
+ * 全部落到这里。所以 themes.css 里不需要再为 light-blue 单独写一块。
+ *
+ * 主色三档之外，正文/底色/边框这些中性色刻意不随主题变化：
+ * 换主题只该换强调色，正文对比度不能跟着一起漂。
+ */
 :root {
-  --vp-pink: #fb7299;
-  --vp-pink-dark: #e85a82;
-  --vp-blue: #00aeec;
+  --vp-primary: #00aeec;
+  --vp-primary-dark: #008bbd;
+  --vp-primary-light: #e6f7fd;
   --vp-text: #18191c;
   --vp-text-2: #61666d;
   --vp-bg: #f4f5f7;
   --vp-card: #ffffff;
   --vp-border: #e3e5e7;
+
+  /* 让 Element Plus 组件跟着一起变色。
+     light-N 是主色按 N/10 的比例往白里混，N 越大越浅；dark-2 是往黑里混 20%。
+     EP 的按钮 hover/active/disabled、tag、tabs 下划线都靠这几档，少写一档就会出现
+     「按钮变色了但 hover 还是蓝的」。 */
+  --el-color-primary: #00aeec;
+  --el-color-primary-light-3: #4dc6f2;
+  --el-color-primary-light-5: #80d7f6;
+  --el-color-primary-light-7: #b3e7f9;
+  --el-color-primary-light-8: #cceffb;
+  --el-color-primary-light-9: #e6f7fd;
+  --el-color-primary-dark-2: #008bbd;
 }
 
 * {
@@ -45,13 +66,4 @@ a {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-}
-
-.btn-pink {
-  background: var(--vp-pink);
-  border-color: var(--vp-pink);
-}
-.btn-pink:hover {
-  background: var(--vp-pink-dark);
-  border-color: var(--vp-pink-dark);
 }

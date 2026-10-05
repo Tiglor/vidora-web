@@ -9,12 +9,18 @@
         </div>
 
         <nav class="top-nav">
-          <router-link to="/" class="top-link" active-class="active">首页</router-link>
-          <router-link to="/?cat=1" class="top-link">动画</router-link>
-          <router-link to="/?cat=2" class="top-link">番剧</router-link>
-          <router-link to="/?cat=3" class="top-link">音乐</router-link>
-          <router-link to="/?cat=4" class="top-link">游戏</router-link>
-          <router-link to="/?cat=5" class="top-link">科技</router-link>
+          <router-link
+            to="/"
+            class="top-link"
+            :class="{ active: route.path === '/' && !route.query.cat }"
+          >首页</router-link>
+          <router-link
+            v-for="c in topCategories"
+            :key="c.id"
+            :to="{ path: '/', query: { cat: c.id } }"
+            class="top-link"
+            :class="{ active: isCatActive(c.id) }"
+          >{{ c.name }}</router-link>
         </nav>
 
         <div class="search-box">
@@ -32,11 +38,11 @@
               <el-icon><Search /></el-icon>
             </template>
           </el-autocomplete>
-          <el-button class="btn-pink search-btn" @click="doSearch">搜索</el-button>
+          <el-button type="primary" class="search-btn" @click="doSearch">搜索</el-button>
         </div>
 
         <div class="actions">
-          <el-button class="btn-pink upload-btn" @click="goUpload">
+          <el-button type="primary" class="upload-btn" @click="goUpload">
             <el-icon><UploadFilled /></el-icon> 投稿
           </el-button>
           <template v-if="userStore.isLoggedIn">
@@ -78,15 +84,35 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/store/user'
+import { useDictStore } from '@/store/dict'
 import { getSuggests } from '@/api/search'
 import { ElMessageBox } from 'element-plus'
 
 const router = useRouter()
+const route = useRoute()
 const userStore = useUserStore()
+const dict = useDictStore()
 const keyword = ref('')
+
+// 顶栏只放一级分区：子分区在首页侧边栏（CategoryNav）里已经按层级展开了，
+// 顶栏是横排、放不下第二层，塞满反而会把搜索框挤没。
+// 最多 8 个是留给「投稿/登录」那排按钮的横向空间上限，后台新建的分类超出 8 个时
+// 仍然能在侧边栏里点到，不会失联。
+const topCategories = computed(() => dict.flatCategories.filter((c) => c.depth === 0).slice(0, 8))
+
+function isCatActive(id) {
+  // query 里永远是字符串，后端回来的 id 是数字，两边都转字符串比（和侧边栏同一处坑）
+  return route.path === '/' && String(route.query.cat ?? '') === String(id)
+}
+
+// 在布局这一层拉一次字典：首页、搜索页、上传页共用同一份数据，
+// store 里对同一请求做了在途合并，一次进站只会打网关一遍。
+onMounted(() => {
+  dict.loadCategories().catch(() => {})
+})
 
 // 搜索联想词接口已在网关匿名放行，访客也能使用
 async function querySuggests(queryString, cb) {
@@ -103,6 +129,17 @@ function onSelectSuggest(item) {
   keyword.value = item.keyword
   doSearch()
 }
+
+// 搜索页自己没有输入框，用的就是这个顶栏框。热搜榜点进去、或者别人分享的
+// ?keyword=xxx 链接打开时，结果换了而框里还是空的，看着像搜索坏了，也没法改词重搜。
+// 只在带 keyword 的时候回填：离开搜索页时不清空，用户打的字留着。
+watch(
+  () => route.query.keyword,
+  (v) => {
+    if (typeof v === 'string') keyword.value = v
+  },
+  { immediate: true }
+)
 
 function goHome() {
   router.push('/')
@@ -142,7 +179,7 @@ function onCommand(cmd) {
   position: sticky;
   top: 0;
   z-index: 100;
-  background: #fff;
+  background: var(--vp-card);
   border-bottom: 1px solid var(--vp-border);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
 }
@@ -163,7 +200,7 @@ function onCommand(cmd) {
   width: 34px;
   height: 34px;
   border-radius: 8px;
-  background: var(--vp-pink);
+  background: var(--vp-primary);
   color: #fff;
   display: flex;
   align-items: center;
@@ -174,7 +211,7 @@ function onCommand(cmd) {
 .brand-name {
   font-size: 18px;
   font-weight: 700;
-  color: var(--vp-pink);
+  color: var(--vp-primary);
 }
 .top-nav {
   display: flex;
@@ -188,7 +225,7 @@ function onCommand(cmd) {
 }
 .top-link.active,
 .top-link:hover {
-  color: var(--vp-pink);
+  color: var(--vp-primary);
 }
 .search-box {
   display: flex;
@@ -228,7 +265,7 @@ function onCommand(cmd) {
 }
 .footer {
   border-top: 1px solid var(--vp-border);
-  background: #fff;
+  background: var(--vp-card);
   color: var(--vp-text-2);
   font-size: 13px;
   height: 50px;

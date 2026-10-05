@@ -16,6 +16,13 @@ export function getVideo(id) {
   return request.get(`/videos/${id}`)
 }
 
+// POST /api/videos/batch  body: [id, ...] -> VideoInfo[]
+// 服务端夹到 50 个、只回存在的行、顺序不保证，
+// 所以调用方要自己按 id 建映射再按原顺序取，别按下标对齐。
+export function listVideosByIds(ids) {
+  return request.post('/videos/batch', ids)
+}
+
 // POST /api/videos/upload (multipart, 需 video:upload) -> VideoInfo
 export function uploadVideo(formData) {
   return request.post('/videos/upload', formData, {

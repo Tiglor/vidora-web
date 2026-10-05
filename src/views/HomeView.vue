@@ -2,7 +2,7 @@
   <div class="home">
     <div class="home-body">
       <CategoryNav
-        :categories="categories"
+        :categories="navCategories"
         v-model="activeCat"
         @change="onCatChange"
       />
@@ -40,18 +40,13 @@ import { useRoute, useRouter } from 'vue-router'
 import CategoryNav from '@/components/CategoryNav.vue'
 import VideoCard from '@/components/VideoCard.vue'
 import { listVideos } from '@/api/video'
+import { useDictStore } from '@/store/dict'
 
-// 与后端 category_id 对齐（演示用分区，可按实际业务扩展）
-const categories = [
-  { id: '', name: '推荐' },
-  { id: 1, name: '动画' },
-  { id: 2, name: '番剧' },
-  { id: 3, name: '音乐' },
-  { id: 4, name: '游戏' },
-  { id: 5, name: '科技' },
-  { id: 6, name: '生活' },
-  { id: 7, name: '影视' }
-]
+const dict = useDictStore()
+
+// 「推荐」是前端自己的伪项（不带 categoryId 就是全站最新），后面的分区全部来自 content_category：
+// 后台改了名字、加了子分区、下了某个区，这里不用改代码就会跟着变。
+const navCategories = computed(() => [{ id: '', name: '推荐' }, ...dict.flatCategories])
 
 const route = useRoute()
 const router = useRouter()
@@ -63,10 +58,7 @@ const current = ref(1)
 const pageSize = ref(12)
 const loading = ref(false)
 
-const currentCatName = computed(() => {
-  const c = categories.find((x) => String(x.id) === String(activeCat.value))
-  return c ? c.name : '推荐'
-})
+const currentCatName = computed(() => dict.categoryName(activeCat.value) || '推荐')
 
 async function fetchList() {
   loading.value = true
@@ -97,7 +89,11 @@ function onPage(p) {
   fetchList()
 }
 
-onMounted(fetchList)
+onMounted(() => {
+  // 分区字典由 DefaultLayout 统一拉一次（顶栏和侧边栏共用），这里只管列表。
+  // 分区万一没拉到，侧边栏兜底还剩「推荐」那一项，它不需要 categoryId，首页不会整块白掉。
+  fetchList()
+})
 watch(() => route.query.cat, (v) => {
   activeCat.value = v || ''
   current.value = 1

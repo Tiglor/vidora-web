@@ -5,6 +5,20 @@
     <link rel="icon" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>微视频 · 在线视频平台</title>
+    <script>
+      // 主题必须在首次绘制前落到 <html data-theme>，否则会先闪一下默认浅蓝再跳成用户的颜色。
+      //
+      // 这里是内联的、且刻意不加 type="module"：module 脚本是 deferred 的，
+      // 要等到 DOM 解析完才执行，那时首帧早就画出去了。
+      //
+      // VALID 清单要和 src/config/themes.js 的 THEME_OPTIONS 保持一致 ——
+      // 这段脚本 import 不到那个模块，这是本次改动唯一有意接受的重复。
+      ;(function () {
+        var VALID = ['light-blue', 'pink', 'green', 'purple', 'orange']
+        var saved = localStorage.getItem('vp_theme')
+        document.documentElement.dataset.theme = VALID.indexOf(saved) >= 0 ? saved : 'light-blue'
+      })()
+    </script>
   </head>
   <body>
     <div id="app"></div>

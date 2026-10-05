@@ -12,7 +12,7 @@
           show-word-limit
         />
         <div class="box-actions">
-          <el-button class="btn-pink" size="small" :disabled="!text.trim()" @click="submit">
+          <el-button type="primary" size="small" :disabled="!text.trim()" @click="submit">
             发布
           </el-button>
         </div>
@@ -26,7 +26,7 @@
         <div class="item-main">
           <div class="name">{{ c.userName || '匿名用户' }}</div>
           <div class="content">{{ c.content }}</div>
-          <div class="time">{{ c.createTime || '' }}</div>
+          <div class="time">{{ formatTime(c.createTime) }}</div>
         </div>
       </li>
       <li v-if="comments.length === 0" class="empty">暂无评论，快来抢沙发~</li>
@@ -44,6 +44,12 @@ defineProps({
 })
 const emit = defineEmits(['submit'])
 const text = ref('')
+
+// 后端给的是 LocalDateTime 的 JSON 串（2026-10-02T18:20:00），
+// 与详情页「发布时间」保持同一种形状：去掉 T、截到分钟
+function formatTime(t) {
+  return t ? String(t).replace('T', ' ').slice(0, 16) : ''
+}
 
 function submit() {
   const t = text.value.trim()
@@ -92,7 +98,7 @@ function submit() {
   line-height: 1.5;
 }
 .time {
-  color: #999;
+  color: var(--vp-text-2);
   font-size: 12px;
 }
 .empty {

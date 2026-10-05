@@ -7,6 +7,7 @@
       autoplay
       playsinline
       :poster="poster"
+      @error="onMediaError"
     ></video>
     <div v-if="error" class="error-tip">
       <el-alert type="error" :closable="false" :title="error" />
@@ -16,7 +17,6 @@
 
 <script setup>
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
-import Hls from 'hls.js'
 
 const props = defineProps({
   src: { type: String, default: '' },
@@ -26,6 +26,9 @@ const props = defineProps({
 const videoEl = ref(null)
 const error = ref('')
 let hls = null
+// hls.js 改成按需动态加载后，load 变成异步的：src 连着变两次时，
+// 先发出的那次解析回来不能再往新的 video 上 attach，用序号丢掉过期结果
+let loadSeq = 0
 
 function destroyHls() {
   if (hls) {
@@ -34,19 +37,39 @@ function destroyHls() {
   }
 }
 
-function load(src) {
+// 后端 getPlayUrl 没转码时回的是源文件地址（mp4），喂给 hls.js 解析必失败
+function isHlsSource(src) {
+  return /\.m3u8(\?|$)/i.test(src)
+}
+
+// 原生 <video> 加载失败（404、域名解析不了、编码不支持）时只剩一块点不动的黑屏，
+// 这里补一句人话。走 hls.js 时它有自己的 ERROR 事件，不在这里重复报。
+function onMediaError() {
+  if (hls || !props.src) return
+  error.value = '视频加载失败，播放地址可能已失效'
+}
+
+async function load(src) {
+  const seq = ++loadSeq
   error.value = ''
+  destroyHls()
   const video = videoEl.value
   if (!video || !src) return
-  destroyHls()
 
-  // 原生支持 HLS（Safari）直接播放 m3u8
-  if (video.canPlayType('application/vnd.apple.mpegurl')) {
+  // 非 HLS，或浏览器原生支持 HLS（Safari）：交给 <video> 自己放
+  if (!isHlsSource(src) || video.canPlayType('application/vnd.apple.mpegurl')) {
     video.src = src
     return
   }
-  // 其他浏览器用 hls.js
-  if (Hls.isSupported()) {
+
+  try {
+    // 只有真的需要 HLS 时才拉这个 chunk（约 590KB）
+    const { default: Hls } = await import('hls.js')
+    if (seq !== loadSeq || !videoEl.value) return
+    if (!Hls.isSupported()) {
+      video.src = src
+      return
+    }
     hls = new Hls({ lowLatencyMode: false })
     hls.loadSource(src)
     hls.attachMedia(video)
@@ -55,8 +78,9 @@ function load(src) {
         error.value = '视频加载失败：' + (data.details || '未知错误')
       }
     })
-  } else {
+  } catch (e) {
     video.src = src
+    error.value = '播放器组件加载失败，已退回原生播放'
   }
 }
 

@@ -69,7 +69,7 @@ const durationText = computed(() => {
   border-radius: 4px;
 }
 .badge {
-  background: var(--vp-pink);
+  background: var(--vp-primary);
 }
 .info {
   padding: 8px 10px 10px;

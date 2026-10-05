@@ -1,0 +1,72 @@
+/*
+ * 主题包。
+ *
+ * 新增一个主题只需要三步，后端不用改、数据库不用迁移：
+ *   1. 这里加一块 [data-theme='xxx']
+ *   2. src/config/themes.js 的 THEME_OPTIONS 加一项
+ *   3. index.html 内联防闪脚本的 VALID 数组加一个字符串
+ *
+ * 默认的 light-blue 不在这里 —— 它的值就是 main.css 的 :root，
+ * 这样「data-theme 挂了个不认识的 key」时会自然落回默认色，而不是渲染成一片空白。
+ *
+ * 主色三档之外，--vp-text / --vp-text-2 / --vp-bg / --vp-card / --vp-border
+ * 刻意不在这里出现：换主题只该换强调色，正文和底色的对比度不能跟着主题漂。
+ *
+ * --el-color-primary-light-N 按 Element Plus 的公式算：
+ *   light-N = (1 - N/10) × 主色 + (N/10) × 白    （N 越大越浅）
+ *   dark-2  = 0.8 × 主色 + 0.2 × 黑
+ * --vp-primary-dark 取 dark-2、--vp-primary-light 取 light-9，
+ * 保证自定义类和 EP 组件用的是同一档深浅，不会在同页出现两种 hover 色。
+ */
+
+[data-theme='pink'] {
+  --vp-primary: #fb7299;
+  --vp-primary-dark: #c95b7a;
+  --vp-primary-light: #fff1f5;
+  --el-color-primary: #fb7299;
+  --el-color-primary-light-3: #fc9cb8;
+  --el-color-primary-light-5: #fdb9cc;
+  --el-color-primary-light-7: #fed5e0;
+  --el-color-primary-light-8: #fee3eb;
+  --el-color-primary-light-9: #fff1f5;
+  --el-color-primary-dark-2: #c95b7a;
+}
+
+[data-theme='green'] {
+  --vp-primary: #42b883;
+  --vp-primary-dark: #359369;
+  --vp-primary-light: #ecf8f3;
+  --el-color-primary: #42b883;
+  --el-color-primary-light-3: #7bcda8;
+  --el-color-primary-light-5: #a1dcc1;
+  --el-color-primary-light-7: #c6eada;
+  --el-color-primary-light-8: #d9f1e6;
+  --el-color-primary-light-9: #ecf8f3;
+  --el-color-primary-dark-2: #359369;
+}
+
+[data-theme='purple'] {
+  --vp-primary: #7c4dff;
+  --vp-primary-dark: #633ecc;
+  --vp-primary-light: #f2edff;
+  --el-color-primary: #7c4dff;
+  --el-color-primary-light-3: #a382ff;
+  --el-color-primary-light-5: #bea6ff;
+  --el-color-primary-light-7: #d8caff;
+  --el-color-primary-light-8: #e5dbff;
+  --el-color-primary-light-9: #f2edff;
+  --el-color-primary-dark-2: #633ecc;
+}
+
+[data-theme='orange'] {
+  --vp-primary: #ff7043;
+  --vp-primary-dark: #cc5a36;
+  --vp-primary-light: #fff1ec;
+  --el-color-primary: #ff7043;
+  --el-color-primary-light-3: #ff9b7b;
+  --el-color-primary-light-5: #ffb8a1;
+  --el-color-primary-light-7: #ffd4c7;
+  --el-color-primary-light-8: #ffe2d9;
+  --el-color-primary-light-9: #fff1ec;
+  --el-color-primary-dark-2: #cc5a36;
+}

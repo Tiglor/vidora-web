@@ -71,7 +71,13 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import VideoPlayer from '@/components/VideoPlayer.vue'
 import CommentList from '@/components/CommentList.vue'
-import { getVideo, getPlayUrl, getDownloadUrl, listVideos } from '@/api/video'
+import {
+  getVideo,
+  getPlayUrl,
+  getDownloadUrl,
+  listVideos,
+  listVideosByIds
+} from '@/api/video'
 import { listComments, createComment } from '@/api/comment'
 import { setActive, getActionCounts, reportPlay, getPlayTotals } from '@/api/interact'
 import { getFeed, reportClick } from '@/api/recommend'
@@ -159,16 +165,24 @@ async function loadRecommends(v) {
   try {
     let list = []
     if (userStore.isLoggedIn) {
-      // scene 只有 home / follow / topic 三种取值，详情页侧栏归到 topic
-      const feed = (await getFeed({ scene: 'topic', size: 6 })) || []
-      const others = feed.filter((r) => r.videoId !== v.id)
-      // feed 只给 videoId，标题封面得逐个补：后端没有按 id 批量取视频的接口（BFF 是待完成项）
-      const resolved = await Promise.all(
-        others.map((r) =>
-          getVideo(r.videoId).then((x) => ({ ...x, recId: r.id })).catch(() => null)
-        )
-      )
-      list = resolved.filter(Boolean)
+      try {
+        // scene 只有 home / follow / topic 三种取值，详情页侧栏归到 topic
+        const feed = (await getFeed({ scene: 'topic', size: 6 })) || []
+        const candidates = feed.filter((r) => r.videoId !== v.id)
+        const ids = candidates.map((r) => r.videoId)
+        // feed 只给 videoId，标题封面靠一次 POST /videos/batch 补齐。
+        // batch 只回存在的行、顺序也不保证，所以按 id 建映射再按 feed 原顺序取，别按下标对齐。
+        const details = ids.length ? (await listVideosByIds(ids)) || [] : []
+        const byId = new Map(details.map((x) => [x.id, x]))
+        // 记住「视频 → 推荐记录 id」，点击上报时才有东西可传给推荐服务
+        const recIdByVideo = new Map(candidates.map((r) => [r.videoId, r.id]))
+        list = ids
+          .map((id) => byId.get(id))
+          .filter(Boolean)
+          .map((x) => ({ ...x, recId: recIdByVideo.get(x.id) }))
+      } catch (e) {
+        // feed 或批量补详情挂了也别让侧栏直接空着，落回下面同分区的最新视频
+      }
     }
     if (list.length === 0) {
       const params = { current: 1, size: 7 }

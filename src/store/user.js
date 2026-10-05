@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { login as apiLogin, register as apiRegister } from '@/api/auth'
+import { useThemeStore } from '@/store/theme'
 
 const TOKEN_KEY = 'vp_token'
 
@@ -38,6 +39,8 @@ export const useUserStore = defineStore('user', {
       localStorage.setItem('vp_avatarUrl', vo.avatarUrl || '')
       localStorage.setItem('vp_roles', JSON.stringify(this.roles))
       localStorage.setItem('vp_permissions', JSON.stringify(this.permissions))
+      // 主题跟随账号：换设备登录时靠这一行同步，不依赖本地缓存
+      useThemeStore().adoptFromServer(vo.themeKey)
     },
     logout() {
       this.token = ''
@@ -52,6 +55,8 @@ export const useUserStore = defineStore('user', {
       localStorage.removeItem('vp_avatarUrl')
       localStorage.removeItem('vp_roles')
       localStorage.removeItem('vp_permissions')
+      // 主题跟着账号走，账号退出就回默认。token 失效时 request.js 的 401 拦截器也会走到这里
+      useThemeStore().reset()
     }
   }
 })

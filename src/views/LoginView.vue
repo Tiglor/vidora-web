@@ -9,7 +9,7 @@
         <el-form-item label="密码" prop="password">
           <el-input v-model="form.password" type="password" show-password placeholder="请输入密码" @keyup.enter="doLogin" />
         </el-form-item>
-        <el-button class="btn-pink submit" :loading="loading" @click="doLogin">登录</el-button>
+        <el-button type="primary" class="submit" :loading="loading" @click="doLogin">登录</el-button>
       </el-form>
       <div class="foot">
         还没有账号？<router-link to="/register">立即注册</router-link>
@@ -68,11 +68,10 @@ async function doLogin() {
 .auth-card h2 {
   margin: 0 0 20px;
   text-align: center;
-  color: var(--vp-pink);
+  color: var(--vp-primary);
 }
 .submit {
   width: 100%;
-  color: #fff;
 }
 .foot {
   text-align: center;
