@@ -1,6 +1,6 @@
 # Skill：在浏览器里验证一次改动
 
-适用：任何准备对用户说「做完了」的时刻。本项目没有测试框架、没有 lint、没有 typecheck，`npm run build` 只能证明代码能被 Vite 编译，**剩下的正确性只有人工走查能证明**。
+适用：任何准备对用户说「做完了」的时刻。本项目没有测试框架、没有 lint、**没有类型检查**：`npm run build` 只能证明代码能被 Vite 编译，字段名、props 形状、接口路径一概不管，也不证明后端今天就是这样。**本端唯一的机械门禁就是 build，它管不到行为**，所以剩下的正确性只有人工走查能证明 —— 这一步不是可选项。
 
 ---
 
@@ -13,9 +13,9 @@ npm run build
 
 判定标准：**不能有 error**。下面这类告警是既有状态，不算失败，也不要在交付里把它写成问题或假装没看见：
 
-- `Some chunks are larger than 500 kB after minification`（index chunk 约 1.27 MB，含 Element Plus + hls.js；`VideoDetailView` 601 kB）。这是已知体积状况，未经用户同意不要动 `vite.config.js` 的 manualChunks。
+- `Some chunks are larger than 500 kB after minification`。`vite.config.js` 的 `manualChunks` 已经把依赖切成三块（本轮实测 `element-plus` 961 kB、`hls` 595 kB、`vendor` 294 kB，业务 chunk 都在 10 kB 级），超阈值的是 element-plus 与 hls 这两块第三方库，属已知状况。未经用户同意不要动 `manualChunks`，也不要把 element-plus 改成按需引入（那是另一件事，需要装依赖）。
 
-构建通过不代表功能对：模板里的运行时错误、字段名拼错、异步时序问题都不会被拦住。所以必须继续往下走。
+build 只保证 Vite 打得动：`import` 路径写错、语法错、模板编译不过才会在这里暴露。**字段名拼错、props 传错名、路由 meta 写错，它全都不会响**（本端没有类型检查，那条离线契约链路已于 2026-10-06 撤掉）。模板里的运行时取值、异步时序、枚举档位串台，全部要靠往下几步的走查。
 
 ## 第 1 步：起开发服务器
 
@@ -47,7 +47,7 @@ npm run dev
 ### B. 改了 API 调用 / 接了新字段
 
 1. Network 里核对请求形状（method、path、query/body）与 Controller 一致。
-2. 点开 Response 原始 JSON，把前端读的每个字段名逐个和 JSON key 对齐 —— **这是防契约漂移最有效的一步**。
+2. 点开 Response 原始 JSON，把页面读到的**每一个键名逐个在这里找到**（本端没有类型检查，防漂移只能这样手动比），再核对名字之外的三件事：这个接口**真的**返回了你读的那个字段（实体里有不等于这个接口给）、值的档位对得上 SQL 列注释、可空列给的是 `null` 还是压根缺键。
 3. 未登录再走一遍同一页面：访客能看到的内容不能被打到登录页（若被踹走，说明调了白名单外的接口且没判 `isLoggedIn`）。
 4. 权限不足场景：用一个没有 `video:upload` 的账号开 `/upload`，应看到黄色 `el-alert` 提示且上传按钮 disabled（`UploadView.vue`）。
 
@@ -89,6 +89,7 @@ npm run dev
 ```
 已验证
 - npm run build 通过，仅既有的 chunk 体积告警。
+- 已对照 InteractActionController.myFavorites 与 InteractAction 的字段声明，页面读的三个名字都在响应 VO 里。
 - /video/1 硬刷新：标题、播放计数、点赞数渲染正常，Console 无新增报错。
 - 未登录访问 /video/1：详情与评论可见，未被踹到登录页（loadInteract 走了 isLoggedIn 短路）。
 
@@ -99,7 +100,8 @@ npm run dev
 
 禁止写法：
 
-- 「已通过类型检查」—— 本项目没有 TypeScript，也没有 `vue-tsc`。
+- 「构建通过，所以与后端对齐」—— `npm run build` 只证明 Vite 打得动，它连一个字段名都没核对过。要说对齐，只能写「已对照某某 Controller / VO 的某几行」或「已对着 Response 原始 JSON 比过键名」。
+- 「已通过类型检查」—— 本端没有类型检查（曾有的 `npm run typecheck` 随离线契约链路于 2026-10-06 撤掉）。
 - 「测试通过」—— 没有任何测试脚本或测试文件。
 - 「lint 干净」—— 没有 ESLint/Prettier 配置。
 - 「应该没问题 / 理论上是对的」代替明确标注未验证。

@@ -124,7 +124,7 @@ let pollDeadline = 0
 let pollFailures = 0
 
 const statusTag = computed(() => {
-  // transcode_task.status 只有 0-待处理 1-处理中 2-成功 3-失败（见 SQL/02 的列注释），
+  // video_transcode_task.status 只有 0-待处理 1-处理中 2-成功 3-失败（见 vidora-cloud SQL/vidora_cloud.sql 第三节的列注释），
   // 之前这里多写了一个 4，是照着 video_info.status 的档位串了台
   const map = {
     0: { text: '待处理', type: 'info' },

@@ -15,7 +15,7 @@ vidora 是一个视频播放类应用，四部分构成：
 | `vidora-admin` | 运营与管理后台 | 内部管理员，接口被网关 `ADMIN_PATH_PREFIXES` 按 clientKey 锁定 |
 | `vidora-cloud` | Spring Cloud 后端（9 个服务 + 网关），契约的唯一权威源 | — |
 
-技术栈（来自 `package.json`，注意**没有 TypeScript**）：Vue 3.5 + Vite 5 + Element Plus 2.8 + Pinia 2 + vue-router 4 + axios 1.7 + hls.js 1.5。
+技术栈（来自 `package.json`）：Vue 3.5 + Vite 5 + Element Plus 2.8 + Pinia 2 + vue-router 4 + axios 1.7 + hls.js 1.5。**业务源码是纯 JavaScript**（`.js` / `.vue`），没有 `.ts` 业务文件、没有 `tsconfig.json` / `jsconfig.json`、devDependencies 里只有 `@vitejs/plugin-vue` + `vite`（外加 element-plus / hls.js / axios / pinia / vue-router 这些运行时包）。**本端没有类型定义，也没有类型门禁**：接口形状只以注释形式写在 `src/api/*.js` 每个函数上方，权威源在后端。
 
 本端已覆盖的功能面（对应 `src/router/index.js` 的 7 个页面）：首页推荐与分区浏览、搜索与热搜榜、视频详情与 HLS 播放、点赞/收藏/分享、评论发布、投稿与转码进度、个人中心（含主题选择与我的投稿）、登录注册。
 
@@ -64,6 +64,7 @@ vidora 是一个视频播放类应用，四部分构成：
 可被人肉复核的观察点，一条一个动作。至少包含：
 - 正常路径看到什么
 - 数据拿不到 / 未登录 / 权限不足时看到什么
+- 碰了接口或字段：每个新用到的字段都要在浏览器里看到它真的渲染出值。本端没有类型检查，而模板普遍写了兜底（`{{ video.playCount || 0 }} 播放`），所以字段漂移的症状是**数字恒为 0**、封面恒为默认图，不报错也不空白；只有 `用户 #${c.userId}` 这类现算的展示名才会露出 `#undefined`
 - `npm run build` 通过
 ```
 
@@ -75,7 +76,16 @@ vidora 是一个视频播放类应用，四部分构成：
 
 **唯一权威源是 vidora-cloud 的 Controller 及其 VO / entity / DTO，不是前端的注释。**
 
-理由：本项目没有类型文件，接口形状全靠 `src/api/*.js` 上方的人工注释传递。人工抄的东西一定会漂 —— mobile 端就发生过 `HotSearch.heat` 实际已改名 `heatScore` 的事故。所以规则是：**接入或改动任何后端字段前，现场打开对应 Controller 看方法签名和字段声明。**
+理由：本端与后端之间**没有任何机械校验点**。曾经的离线链路（`../vidora-cloud/openapi/*.json` → `npm run gen:api` → `src/api/generated/*.gen.d.ts` → `npm run typecheck`）已于 2026-10-06 撤掉，理由写在 `.code/README.md`；现在接口形状只活在 `src/api/*.js` 的注释和页面取值点里，全都是手抄副本，拼错字段名不会编译报错，只会在运行时静默变成兜底值。mobile 端那次 `HotSearch.heat` 实为 `heatScore` 的事故就是这类：本端现在没有任何关卡能拦住它，只有浏览器走查能发现。
+
+回后端读要确认的四件事：
+
+1. **字段名与形状**。本端注释可能已经过期，唯一能核对的是后端 VO/entity 的字段声明。
+2. **调用本身**。`src/api/*.js` 里的 URL、方法、参数名是手写的，后端改了路径不会通知你。
+3. **类型表达不了的语义**：枚举档位、可空列到底是 `null` 还是缺键、某字段只有详情接口才带、写入方向字段（`passwordHash`）照样出现在实体里。
+4. **网关鉴权边界**（见下文两节）。
+
+所以规则只有一条：**接入或改动任何后端字段前，现场打开对应 Controller 看方法签名和字段声明**，名字和语义都在那里。
 
 ### 服务 → 路径 → 源码位置映射
 
@@ -100,7 +110,7 @@ vidora 是一个视频播放类应用，四部分构成：
 
 统一 `ApiResult<T>`（`vidora-common\common-core\...\core\ApiResult.java`）：`{ code, message, data }`，成功恒为 `code = 200`、`message = "success"`。分页是 MyBatis-Plus 的 `IPage`/`Page`：`{ records, total, current, size, pages }`。实体普遍继承 `BaseEntity`（`id` / `createTime` / `updateTime` / `isDeleted`）。
 
-`request.js` 已经把 `data` 拆出来了，前端拿到的直接是 `T`。
+三端的契约副本都靠手写：admin 是 `src/api/types.ts`（一份 TS interface 清单），mobile 是 `src/types/index.ts`，**本端连类型都没有**，形状只写在 `src/api/*.js` 的注释里。所以同一件事要抄三遍，改了后端得挨个点名字提醒。运行层唯一手写的约定在 `src/utils/request.js`：axios 默认 resolve 的是 `AxiosResponse`，这里拆包后 resolve 的是 `ApiResult.data`，页面拿到的直接是业务数据 `T`。另外 MyBatis-Plus 的 `IPage` 带着一批框架内部字段（`countId` / `maxLimit` / `optimizeCountSql` / `orders`），**页面只准读 `records` / `total` / `current` / `size` / `pages`**，别把内部字段带进界面。
 
 ### 鉴权边界
 
@@ -116,14 +126,14 @@ vidora 是一个视频播放类应用，四部分构成：
 
 | 来源 | 取值 |
 | --- | --- |
-| `video_info.status`（SQL/02 第 23 行） | 0-上传中 1-转码中 2-审核中 3-已发布 4-已下架 |
-| `transcode_task.status`（SQL/02 第 52 行；`TranscodeTask.java`） | 0-待处理 1-处理中 2-成功 3-失败 |
+| `video_info.status`（`SQL/vidora_cloud.sql` 第三节） | 0-上传中 1-转码中 2-审核中 3-已发布 4-已下架 |
+| `video_transcode_task.status`（同节；`TranscodeTask.java`） | 0-待处理 1-处理中 2-成功 3-失败 |
 | `content_category.status` / `content_tag.status` | 0-禁用 1-启用 |
 | `content_hot_search.status` | 0-下线 1-上线 |
 | `interact_action.status` | 0-取消 1-有效 |
 | `ActionType` | 1-点赞 2-收藏 3-分享 |
 
-迁移脚本在 `E:\Project\vidora\vidora-cloud\SQL\`，列注释是这些语义的第一手出处。
+建库脚本是 `E:\Project\vidora\vidora-cloud\SQL\vidora_cloud.sql`（单库单文件、内部按业务分节），列注释是这些语义的第一手出处。
 
 ---
 
@@ -132,10 +142,10 @@ vidora 是一个视频播放类应用，四部分构成：
 一个需求只有同时满足下列条件才算 done，才可以对用户说「完成」：
 
 1. **代码落在正确的层**：新接口进 `src/api/` 对应服务文件并带路径注释；跨页复用数据进 `store/`；纯展示进 `components/`；不要在页面里内联 `axios` 调用。
-2. **契约经现场核对**：涉及的每个后端字段都能指出它在哪个 Controller / VO / entity 的哪一行。凭印象的一律不算。
+2. **契约经现场核对**：涉及的每个后端字段都能指出它在哪个 Controller / VO / entity 的哪一行；本端注释与页面取值点已按那个名字改对，语义（档位、可空、只在某接口返回）以 controller/impl 为准。没去读后端就说「一致」的，一律算未完成。
 3. **降级路径想过了**：接口失败、返回 `null`、未登录、无权限、列表为空 —— 这五种情况各自的界面表现明确，且不产生未处理的 Promise rejection，不产生重复 toast。
 4. **清理副作用到位**：新加的 `setInterval` / hls 实例 / 事件监听有对应的 `onBeforeUnmount` 释放。
 5. **样式跟主题**：新增配色全部走 CSS 变量；如果动了主题相关三处同步点，三处都改了。
-6. **`npm run build` 通过**，并且按 `.code/skills/verify-in-browser.md` 人工走查过受影响路径（这一步要真的做过，做不到就如实标「未验证」及原因）。
-7. **交付说明区分已验证/未验证**，规则见 `agent-rules.md` 第六节。本项目不存在 test / lint / typecheck，**不许在交付里声称跑过它们**。
+6. **`npm run build` 通过**（本端唯一机械门禁），并且按 `.code/skills/verify-in-browser.md` 人工走查过受影响路径（这一步要真的做过，做不到就如实标「未验证」及原因）。
+7. **交付说明区分已验证/未验证**，规则见 `agent-rules.md` 第六节。本项目不存在 test / lint / 类型检查，**不许声称跑过它们**；涉及后端字段时只能说「已对照某某 Controller」，不能说「已由类型检查保证」。
 8. 若过程中发现规范与代码不一致，**回来修订 `.code/` 对应文件**（修订前征求用户同意）。

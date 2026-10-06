@@ -36,6 +36,7 @@ export function submitTranscode(id) {
 }
 
 // GET /api/videos/{id}/transcode-task -> TranscodeTask {status:0/1/2/3, progress, ...}
+// 后端 transcode.enabled=false 时没有任务记录，data 就是 null（不是 status=0），取属性前先判空
 export function getTranscodeTask(id) {
   return request.get(`/videos/${id}/transcode-task`)
 }

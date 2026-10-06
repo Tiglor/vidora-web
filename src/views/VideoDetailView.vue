@@ -137,10 +137,8 @@ async function load(id) {
 
 async function loadComments(videoId) {
   const page = await listComments(videoId, { current: 1, size: 50 })
-  comments.value = (page.records || []).map((comment) => ({
-    ...comment,
-    userName: comment.userName || `用户 #${comment.userId}`
-  }))
+  // 直接存 CommentView：昵称头像不在返回里（CommentView.java 类注释），展示名由组件按 userId 现算
+  comments.value = page.records || []
 }
 
 async function loadInteract(id) {

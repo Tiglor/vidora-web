@@ -1,8 +1,39 @@
-# .code 规范目录
+# vidora-web · AI 协作规范
 
-这个目录是 vidora-web 的 AI 协作规范。它存在的理由：这个项目会由不同的 AI 工具接手，而每个工具都不会天然知道本仓库的约定、坑和验证手段。所有条文的目的是让一个陌生 AI 在读完后能做出**符合本仓库既有风格**的改动，而不是按「业界常识」重写一遍。
+**开始任何开发工作之前，必须先完整读完本目录下的四份规范（`agent-rules.md` / `coding-standards.md` / `requirements.md` 与本文件），再按下面的任务映射翻 `.code/skills/` 里对应的手册。** 这份要求适用于所有 AI 工具（Qoder / Codex / Cursor / Claude Code 等），不因工具而异。
 
-规范全部来自代码现场，不来自想象。每一条都能指到具体文件；如果你发现某条规范和代码对不上，**以代码为准，然后来改这份规范**。
+本仓库**刻意不放根 `AGENTS.md`**：入口只留这一处，避免两份文件各说一套、改一处忘一处。
+
+## 项目一句话
+
+vidora 视频平台的 **Web 端**：Vue 3 + Vite + Element Plus + Pinia + Vue Router + hls.js，**源码是纯 JavaScript**，只服务普通观众（首页推荐流、搜索与联想、详情播放、评论、投稿上传、个人中心）。经网关 `/api` 调用 `../vidora-cloud` 后端，与 `vidora-mobile`、`vidora-admin` 共用同一套契约。
+
+契约在本端**没有类型定义也没有类型门禁**：接口形状只写在 `src/api/*.js` 每个函数上方的注释里，唯一权威源是后端的 Controller / DTO / VO 与 `SQL/vidora_cloud.sql` 的列注释。
+
+## 构建与验证命令
+
+从 `package.json` 的 scripts 抄录，本项目**只有这三条**：
+
+```bash
+npm run dev        # vite，本地 5173，/api 代理到 VITE_GATEWAY（默认 http://localhost:8080）
+npm run build      # vite build，产物在 dist/ —— 本端唯一的机械门禁
+npm run preview    # vite preview --host
+```
+
+没有 lint、没有 test、没有 `typecheck`（曾为离线契约链路配过 `jsconfig.json` + `vue-tsc`，2026-10-06 随该链路一并撤掉）。`build` 只能证明代码能被 Vite 打包，**页面取数对不对、字段名是不是后端今天真的给的名字，它一概不知道** —— 所以交付前必须按 `skills/verify-in-browser.md` 在浏览器里真跑一遍。
+
+## 目录速览
+
+| 路径 | 职责 |
+| --- | --- |
+| `src/api/*.js` | 一个后端服务一个文件，每个导出函数上方注释真实路径、返回形状与已知坑 |
+| `src/utils/request.js` | axios 实例：注入 JWT、拆 `ApiResult`、401/403 处理、toast 去重 |
+| `src/store/*.js` | Pinia options 式 store：`user` / `theme` / `dict` |
+| `src/views/*.vue` | 路由页面，`<script setup>` |
+| `src/components/*.vue` | 纯展示组件，props 进 emit 出，不发请求 |
+| `src/layouts/DefaultLayout.vue` | 顶栏 + 搜索框 + 内容区容器 + 字典预热 |
+| `src/router/index.js` | 路由表与登录守卫 |
+| `src/styles/main.css`, `src/styles/themes.css`, `src/config/themes.js` | CSS 变量主题引擎（三处需同步） |
 
 ## 四份规范各讲什么
 
@@ -16,7 +47,7 @@
 
 第一次接触本仓库，按 `README.md`（本文）→ `agent-rules.md` → `coding-standards.md` → `requirements.md` 通读一遍。
 
-之后的日常开发不必重读全文：`AGENTS.md` 在仓库根目录会强制你回到这里，按下面的任务映射只翻需要的那几节。
+之后的日常开发不必重读全文，按下面的任务映射只翻需要的那几节。
 
 ## 什么任务翻哪份 skill
 

@@ -22,9 +22,9 @@
     <div class="count">{{ comments.length }} 条评论</div>
     <ul class="list">
       <li v-for="c in comments" :key="c.id">
-        <el-avatar :size="34">{{ (c.userName || 'U').charAt(0) }}</el-avatar>
+        <el-avatar :size="34">{{ displayName(c).charAt(0) }}</el-avatar>
         <div class="item-main">
-          <div class="name">{{ c.userName || '匿名用户' }}</div>
+          <div class="name">{{ displayName(c) }}</div>
           <div class="content">{{ c.content }}</div>
           <div class="time">{{ formatTime(c.createTime) }}</div>
         </div>
@@ -44,6 +44,12 @@ defineProps({
 })
 const emit = defineEmits(['submit'])
 const text = ref('')
+
+// CommentView 只有 userId，昵称头像后端刻意不给（CommentView.java 类注释）：
+// 逐条查用户会把一屏评论变成一屏远程调用，要显示真实昵称得先有批量查用户的接口。
+function displayName(c) {
+  return `用户 #${c.userId}`
+}
 
 // 后端给的是 LocalDateTime 的 JSON 串（2026-10-02T18:20:00），
 // 与详情页「发布时间」保持同一种形状：去掉 T、截到分钟

@@ -2,15 +2,15 @@
 
 适用：后端加了一个新接口要接；现有接口的路径/参数/返回形状变了；某个页面需要多打一次请求。
 
-前置阅读：`.code/coding-standards.md` 第四节、`.code/requirements.md` 第四节。核心事实：`src/utils/request.js` 的响应拦截器已经把 `ApiResult.data` 拆出来了，api 层函数拿到的直接是业务数据。
+前置阅读：`.code/coding-standards.md` 第四节、`.code/requirements.md` 第四节。两个核心事实：`src/utils/request.js` 的响应拦截器已经把 `ApiResult.data` 拆出来了，api 层函数拿到的直接是业务数据；**返回形状在本端只存在于注释里** —— 本端没有类型定义也没有类型检查（曾经那条 `openapi/*.json` → `npm run gen:api` → `.gen.d.ts` 的链路已于 2026-10-06 撤掉），名字对不对全靠你去后端读。
 
 ---
 
 ## 步骤
 
-### 1. 到后端读 Controller，别从前端的注释倒推
+### 1. 到后端读 Controller，别从本仓库的注释倒推
 
-前端 `src/api/*.js` 上方的注释是人工抄录的，会漂。**权威源永远是 Controller。**
+`src/api/*.js` 上方的注释是人工抄的，会漂，而且**漂了不会有任何报错**（模板普遍写了 `|| 0` / `|| []` 兜底，症状是数字恒为 0、封面恒为默认图）。能核对它的只有后端的 Controller / VO / DTO / entity 声明和 `E:\Project\vidora\vidora-cloud\SQL\vidora_cloud.sql` 的列注释。**权威源永远是 Controller。**
 
 定位方法（按 URL 前缀找服务）：
 
@@ -28,6 +28,9 @@ grep -rn --include=*.java "RequestMapping(\"/actions\")" E:/Project/vidora/vidor
 
    注意该 filter 的顺序：**匿名浏览白名单先判**（命中即直接放行，压根不解析 token），所以某个 GET 路径即使同时落在 `ADMIN_PATH_PREFIXES` 里，也照样能被前端以游客身份调到；`ADMIN_PATH_PREFIXES` 只对**带了合法 token**的请求生效。另外 `/api/videos/{数字id}` 及其子路径是靠正则 `VIDEO_DETAIL_PATH` 放行的，不在精确清单里 —— 别只看 `PUBLIC_GET_PATHS` 就断定某个详情类子接口需要登录。
 
+补充：后端加了新接口或新字段时，本端**没有可跑的生成步骤**——把上面读到的形状直接写进注释，并在交付里点名「改了哪个接口、哪个字段、哪些档位」，因为另外两端也不会报错。
+如果后端服务此刻在跑（起服务要先征得用户同意），还可以用该服务自己的 `/v3/api-docs` 复核注释是否写全：springdoc + therapi 已把 Controller 与字段的 Javadoc 渲染进那份 JSON，它是后端唯一的接口文档出口，地址形如 `http://127.0.0.1:8102/v3/api-docs`（8101–8108 是 8 个业务服务，8080 是网关，别混）。
+
 ### 2. 选文件：一个后端服务一个 api 文件
 
 | 后端服务 | 前端文件 |
@@ -43,13 +46,14 @@ grep -rn --include=*.java "RequestMapping(\"/actions\")" E:/Project/vidora/vidor
 
 ### 3. 写函数
 
-模板（照 `src/api/interact.js` 的风格）：
+模板（照 `src/api/interact.js` 的风格：函数上方 `//` 注释，第一行真实路径，第二行返回形状，后面写坑）：
 
 ```js
 import request from '@/utils/request'
 
-// GET /api/actions/favorites?current=&size= -> Page<InteractAction>
-// 只存 targetId，标题封面要用 POST /api/videos/batch 批量补（上限 50 个 id）
+// GET /api/actions/favorites?current=&size=  （需登录）
+// -> 分页 InteractAction { id, targetId, actionType, createTime, ... }，按收藏时间倒序
+// 只存 targetId，标题封面要用 POST /api/videos/batch 批量补（上限 50 个 id、顺序不保证）
 export function listFavorites(params) {
   return request.get('/actions/favorites', { params })
 }
@@ -60,7 +64,8 @@ export function listFavorites(params) {
 - 路径不带 `/api` 前缀（`baseURL` 已经是 `VITE_API_BASE || '/api'`）。
 - 函数名动宾式小驼峰：`listXxx` / `getXxx` / `createXxx` / `updateXxx` / `setXxx` / `reportXxx`。
 - 参数统一收成一个 `params` 对象传 `{ params }`，不要给每个 query 单独开形参（例外见 `getActionCounts(targetType, targetId)` 这种只有两个必带项的）。
-- 注释在第一行给出真实路径与查询串骨架，第二行给出返回类型；**行为上的坑写在注释里**（幂等性、可空语义、副作用、上限、缓存延迟），参照 `api/recommend.js` 里「取出的同时就被标记为已曝光」这类描述。
+- **注释是本端唯一的形状说明**，写清返回的类名 + 页面真正要读的那几个字段即可（`ActionCounts { targetType, targetId, likeCount, ... }` 这种），不要把整份 VO 抄进注释：全量清单既抄不全又没人核对，改了后端也不会有任何工具提醒你它过期了。分页统一写 `-> 分页 Xxx { records / total / current / size / pages }`，`Page<X>` 和 `IPage<X>` 在本端读法一样。
+- 注释第一行给真实路径与查询串骨架，第二行起给**行为上的坑**（幂等性、可空语义、副作用、上限、缓存延迟），参照 `api/recommend.js` 里「取出的同时就被标记为已曝光」这类描述。后端一动，这几行注释就是你要手动跟着改的东西。
 - multipart 才手动设 header，普通 JSON 不要写 `Content-Type`（axios 自己处理）。参考 `uploadVideo(formData)`。
 - **不要在 api 层做数据加工、判登录、弹提示**。它只负责发一次请求。
 
@@ -77,12 +82,15 @@ export function listFavorites(params) {
 npm run build
 ```
 
-再起后端联调时的人工核对顺序（详细走查见 `verify-in-browser.md`）：
+`build` 只保证 Vite 打得动（语法、import 路径），**本端没有任何检查器会核对字段名**，所以它连「名字抄错了」这一类最常见的问题都抓不到。必须接着做下面的联调核对。
+
+起后端联调时的人工核对顺序（详细走查见 `verify-in-browser.md`）：
 
 1. Network 面板确认请求 URL、method、query 与 Controller 一致。
 2. 看原始响应体：外层是不是 `{code:200,message:"success",data:...}`；如果 `code != 200`，拦截器会 reject 并弹 toast，这是预期。
-3. 确认业务代码拿到的值是 `data` 本身而不是整个壳。
-4. 401 / 403 分别试一次：401 应该被踹到登录页并带 `redirect`；403 应该弹「无权限访问」而不会登出。
+3. **把 `data` 里的键名逐个跟你写进注释的那几个名字对一遍**。这一步是本端唯一能防住漂移的检查，前提是你真的对着响应体看，而不是对着注释看。
+4. 确认业务代码拿到的值是 `data` 本身而不是整个壳。
+5. 401 / 403 分别试一次：401 应该被踹到登录页并带 `redirect`；403 应该弹「无权限访问」而不会登出。
 
 ---
 
@@ -94,6 +102,8 @@ npm run build
 4. **布尔/整型枚举的 null 语义**。`ActionCounts.liked` 未登录是 `null` 不是 `false`；后端 `transcodeTask()` 在未开启转码时回 `data: null`。判断要用 `== null` / 显式分支，不能用 `!value` 一把梭。
 5. **把需登录的接口当匿名接口用**。白名单外的 401 **没有响应体**（`unauthorized()` 只设状态码），`error.response.data.message` 是 undefined，拦截器会退回默认文案并把人踢到登录页。
 6. **分页参数名猜错**。后端统一 `current` / `size`（`defaultValue = "1"` / `"10"` 或 `"20"`），不存在 `pageNum` / `pageSize` / `page`。
-7. **改了路径忘了改注释**。api 文件的注释是本项目唯一的接口文档，代码动而注释不动等于留下假线索。
-8. **在 api 层 catch 错误再吞掉**。会让调用方以为成功。api 层永远让 promise 直直地冒出来，由页面决定怎么处理。
-9. **误用管理端接口**。`ADMIN_PATH_PREFIXES`（`/api/users/`、`/api/roles/`、`/api/menus/`、`/api/categories/`、`/api/tags/`、`/api/hot-searches/`、`/api/search/suggests`、`/api/comments/admin/` 等）只对**携带合法 token**的请求做 clientKey 校验，非 admin 令牌调用返回 403「该接口仅限管理端访问」；而同一前缀里落在匿名浏览白名单中的 GET（如 `/api/categories/list`、`/api/categories/tree`、`/api/hot-searches`、`/api/search/suggests`）会在更早一步被直接放行 —— 也就是说 `/api/search/suggests` 同时出现在两张清单上，游客能用、带普通用户 token 反而会被拒。**同前缀不同命运，只能现场读 `GatewayAuthFilter.java` 确认，别按前缀猜。**
+7. **把本仓库的注释当权威**。它现在同时承担「形状」和「语义」两件事，是本端最脆弱的一份真相源：后端改名、删字段、调档位，这里既不报错也没人通知。**任何一次使用之前都回 Controller 读一遍**，代码动而注释不动等于留下假线索。
+8. **在页面里给读不到的字段加兜底把问题盖住**。`v.heatScore || v.heat || 0` 这种「兼容两种名字」的写法看起来稳，实际是把漂移永久藏起来，而且再也没人会去后端确认到底叫哪个。名字错了就改名字，兜底只用于后端明确可能给 `null` 的字段。
+9. **抄注释时把写入方向的字段当响应字段**。请求 DTO 里的字段（如 `ActionRequest.active`、`User.passwordHash`）不会出现在响应里，`ApiResult<Void>` 的 `data` 恒为 `null`；这类只能从 controller 方法签名看出来，注释帮不了你。
+10. **在 api 层 catch 错误再吞掉**。会让调用方以为成功。api 层永远让 promise 直直地冒出来，由页面决定怎么处理。
+11. **误用管理端接口**。`ADMIN_PATH_PREFIXES`（`/api/users/`、`/api/roles/`、`/api/menus/`、`/api/categories/`、`/api/tags/`、`/api/hot-searches/`、`/api/search/suggests`、`/api/comments/admin/` 等）只对**携带合法 token**的请求做 clientKey 校验，非 admin 令牌调用返回 403「该接口仅限管理端访问」；而同一前缀里落在匿名浏览白名单中的 GET（如 `/api/categories/list`、`/api/categories/tree`、`/api/hot-searches`、`/api/search/suggests`）会在更早一步被直接放行 —— 也就是说 `/api/search/suggests` 同时出现在两张清单上，游客能用、带普通用户 token 反而会被拒。**同前缀不同命运，只能现场读 `GatewayAuthFilter.java` 确认，别按前缀猜。**

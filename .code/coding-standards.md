@@ -9,7 +9,7 @@
 | 目录 | 放什么 | 不放什么 |
 | --- | --- | --- |
 | `src/api/` | 一个后端服务一个文件（`video.js` / `comment.js` / `interact.js` / `recommend.js` / `search.js` / `content.js` / `profile.js` / `auth.js`），只导出「一次 HTTP 调用 = 一个函数」 | 不做业务判断、不碰 store、不做数据加工 |
-| `src/utils/` | `request.js`：唯一的 axios 实例与全局拦截器 | 不要在别处再 new 一个 axios |
+| `src/utils/` | `request.js`：唯一的 axios 实例与全局拦截器（末尾 resolve 出来的是 `ApiResult.data`，不是 `AxiosResponse`） | 不要在别处再 new 一个 axios；vue-router 的 `query` 是 `string \| string[]`，在页面里就地 `String(x ?? '')` 归一，不要再抽公共 helper |
 | `src/store/` | Pinia store：`user`（会话）、`theme`（主题落地）、`dict`（字典缓存与在途合并） | 单页面临时状态不要塞进来 |
 | `src/views/` | 路由级页面，与 `src/router/index.js` 一一对应 | 不写可复用展示组件 |
 | `src/components/` | 展示型组件（`VideoCard` / `CommentList` / `CategoryNav` / `VideoPlayer`） | **不发请求**，数据靠 props 进、事件 emit 出 |
@@ -74,6 +74,7 @@ onMounted(fetchList)
 - 派生值一律 `computed`，不在 watch 里手动同步。
 - 定时器/第三方实例这类需要清理的资源，用模块内 `let` 变量 + `onBeforeUnmount` 释放。见 `UploadView.vue` 的 `timer` / `stopPolling()` 和 `VideoPlayer.vue` 的 `hls` / `destroyHls()`。**新加任何 interval 或外部实例，必须同时加卸载清理。**
 - props 用对象式声明并带类型与默认值：`defineProps({ comments: { type: Array, default: () => [] } })`；emit 用 `defineEmits(['submit'])`。
+- 但运行时声明让 vue-tsc 把数组元素推成 `unknown`，模板里读字段会一片报错。纯 JS 用不了 type-only `defineProps`，所以约定是**在脚本里 cast 一次、模板只读这个 computed**：`const rows = computed(() => /** @type {import('@/api/comment').CommentView[]} */ (props.comments))`（`CommentList.vue`、`CategoryNav.vue` 都是这个写法）。契约钉在入口，模板保持干净。
 - 组件对外通信：子传父只走 `emit`，不直接改父组件状态。`CategoryNav.vue` 同时 emit `update:modelValue` 和 `change`，配合父级 `v-model` + `@change`。
 - Element Plus 图标已在 `main.js` 全局注册，模板里直接 `<el-icon><Search /></el-icon>`，**不需要逐个 import**。其他 EP 组件同理（`el-button`、`el-alert`…）。但函数式的 `ElMessage` / `ElMessageBox` 要显式 `import { ElMessage } from 'element-plus'`。
 
@@ -94,7 +95,7 @@ onMounted(fetchList)
 
 ### 4.2 api 文件的写法
 
-每个导出函数上方一行注释标真实路径、参数与返回形状，这是本项目事实上的「接口文档」：
+每个导出函数上方一行注释标真实路径与返回形状，有坑的地方一并写在注释里。**注释是本端唯一的契约说明，但没有任何工具会核对它** —— 写对了没人奖励，写错了也不报错，所以它的正确性只能靠你回后端读代码维持：
 
 ```js
 // GET /api/videos/page?current=&size=&categoryId=&keyword=
@@ -102,8 +103,17 @@ onMounted(fetchList)
 export function listVideos(params) {
   return request.get('/videos/page', { params })
 }
+
+// POST /api/videos/batch  body: [id, ...] -> VideoInfo[]
+// 服务端夹到 50 个、只回存在的行、顺序不保证，
+// 所以调用方要自己按 id 建映射再按原顺序取，别按下标对齐。
+export function listVideosByIds(ids) {
+  return request.post('/videos/batch', ids)
+}
 ```
 
+- 注释写**语义与坑**（枚举档位、可空、只在某接口返回、顺序不保证、要判空），不要抄一份字段清单 —— 抄出来的字段列表是第二个会漂的真相源，而且它漂得比注释本身更安静。
+- 后端「资源不存在回 data:null」的出口必须在注释里写明可能为 `null`：没有任何地方能自动告诉你这件事，只能读 impl（当年漏写，第一个 TypeError 就落在详情页）。
 - 函数名动宾式：`listVideos` / `getVideo` / `createComment` / `setActive` / `reportPlay` / `recordSearch`。
 - 有坑的地方写在注释里，不要埋在实现里。看 `api/recommend.js`：feed「取出的同时候选就被标记为已曝光」「只返回 videoId，标题封面要另外查」——这两句省下后来人半天。
 - multipart 单独设 `headers`（`uploadVideo`）。
@@ -176,7 +186,7 @@ loading.value = false
 3. **为什么不那么做**（事故记录，价值最高）
 
    ```js
-   // transcode_task.status 只有 0-待处理 1-处理中 2-成功 3-失败（见 SQL/02 的列注释），
+   // video_transcode_task.status 只有 0-待处理 1-处理中 2-成功 3-失败（见 vidora-cloud SQL/vidora_cloud.sql 第三节的列注释），
    // 之前这里多写了一个 4，是照着 video_info.status 的档位串了台
    ```
 
@@ -195,26 +205,28 @@ loading.value = false
 
 ---
 
-## 七、类型与契约纪律
+## 七、契约纪律
 
-本项目**没有 TypeScript**，没有 `types.ts`，也没有生成物。所谓「类型」存在于三个地方：
+**本端没有契约类型，也没有契约检查。** 曾经有一条链路（后端 Javadoc → `../vidora-cloud/openapi/*.json` → `npm run gen:api` → `src/api/generated/*.gen.d.ts` → JSDoc `@returns` → `npm run typecheck`），2026-10-06 整条撤掉：快照要靠人手重跑，忘跑时「类型检查通过」证明的是旧契约，比没有检查更容易误导。撤掉之后，接口形状在本端只活在 `src/api/*.js` 的注释和页面取值点里，**写错字段名不会报错，只会在运行时变成 `undefined`**。
 
-1. 后端 Java Controller 的方法签名 + VO/entity 字段（唯一权威源）；
-2. 前端 `src/api/*.js` 的注释（人工抄录，会漂）；
-3. 组件里的运行时取值（`props.video.playCount`）。
+「类型」因此只剩两个地方：
 
-后端侧的补充权威材料：`E:\Project\vidora\vidora-cloud\docs\ARCHITECTURE.md`（架构与待完成项，前端注释里提到的「BFF 是待完成项」「跨服务事件回写没做」出自这里）和 `E:\Project\vidora\vidora-cloud\README.md`（各服务端口、编译方式、前端对接章节）。源码注释引用这两个文档时用的是简称，查证时按上面的路径找。
+1. 后端 Controller 的方法签名 + VO/entity + `SQL/vidora_cloud.sql` 列注释 —— **字段名、形状、语义（档位、可空、哪个接口真的查这一列）的唯一权威**；
+2. 本端各处的手写副本：`src/api/*.js` 的注释、store 与页面里的取值（`props.video.playCount`）—— 它们是第 1 条的抄件，可能已经过期。
 
-因为第 2 项靠手抄，**契约漂移是本项目最常见的 bug 类别**（mobile 端已经踩过 `HotSearch.heat` → `heatScore`）。纪律：
+后端侧的补充权威材料：`E:\Project\vidora\vidora-cloud\.code\ARCHITECTURE.md`（架构与待完成项，前端注释里提到的「BFF 是待完成项」「跨服务事件回写没做」出自这里）和 `E:\Project\vidora\vidora-cloud\README.md`（各服务端口、编译方式、前端对接章节）。源码注释引用这两个文档时用的是简称，查证时按上面的路径找。
 
-- **接入或修改任何后端字段名前，去 vidora-cloud 读对应的 Controller / VO / entity**，用字段声明行作为证据。查询起点见 `requirements.md` 的服务映射表。
-- 注意 MyBatis-Plus 的 `IPage` 包装形状：分页响应永远读 `records` / `total` / `current` / `size` / `pages`。
+纪律：
+
+- **接入或修改任何后端字段前，必须去 vidora-cloud 读 Controller / VO / entity**，当场确认名字与语义。本端没有任何东西会替你兜住拼错的字段名。查询起点见 `requirements.md` 的服务映射表。
+- **注释只写类名 + 页面真正要用的那几个字段**（`api/recommend.js` 就是 `RecommendResult { id, userId, videoId, ... }` 这种写法），不要把整份 VO 抄进注释：抄全量清单等于再造一个会漂的真相源，而它漂的时候没有任何检查器会响。动了后端字段，注释必须跟着改，宁可删掉也不要留错的。
+- 后端实体是包装类型且不带校验注解，可空列实际回的是 `null` 而不是缺键：判空用 `??` 或 `== null` 两边都接，`|| ''` 会把 `0` 吞掉。
+- 注意 MyBatis-Plus 的 `IPage` 包装形状：分页响应永远读 `records` / `total` / `current` / `size` / `pages`，另外那批 `countId` / `maxLimit` / `optimizeCountSql` / `orders` 是框架内部字段，不进界面。
 - 注意可空语义差异：`ActionCounts.liked` / `favorited` 未登录时是 `null` 而不是 `false`（后端 DTO 上有明确注释），前端必须区分「没登录」和「登录了没点过」。
-- 注意 `Long` 序列化成 JSON 是数字，而 URL query 回来是字符串：比较 id 前先 `String(a) === String(b)`。
+- 注意 `Long` 序列化成 JSON 是数字，而 URL query 回来是字符串：比较 id 前先 `String(a) === String(b)`。vue-router 的 `query` 重复 key 给的是数组，取值统一 `String(route.query.x ?? '')`（`DefaultLayout.vue` 已是这个写法；`SearchView.vue` 现在还是 `route.query.keyword || ''`，遇到 `?keyword=a&keyword=b` 会把数组直接当值用，改它时顺手收一下）。
 - 后端返回纯值时（`ApiResult<String>` 的 play-url / download-url），拦截器拆完包后拿到的就是一个字符串，别当对象用。
-- **绝不为了让代码「看起来有类型」而新建一套手写 `types.js`/JSDoc 契约文件**。那只会制造第二个会漂的真相源。要做的是让 `api/*.js` 的注释贴近后端。
 - 后端刻意不校验的枚举（例如 `themeKey` 后端不校验，就是为了加主题不用发版），前端要有兜底：`normalizeThemeKey()` 认不出的 key 一律落回默认。
-- **本文举例的代码也要现场核一遍**。规范里的例子来自某个时间点的仓库快照，可能已经过期或本就带错。给一个已核实为真的对照案例：后端 `CommentView` 的类注释明确写「只带 userId，不带昵称头像」（跨服务补全归 BFF），但 `VideoDetailView.vue` 的 `loadComments()` 读的是 `comment.userName` —— 该字段后端不返回，实际永远走 `用户 #${userId}` 那条兜底分支。这类「代码读了一个后端压根不给的字段」就是漂移的真实形态，只能靠逐字段比对 DTO 抓出来。
+- **本文举例的代码也要现场核一遍**。规范里的例子来自某个时间点的仓库状态。一个已核实的对照案例曾是真的：后端 `CommentView` 类注释写明「只带 userId，不带昵称头像」，而 `loadComments()` 当年读的是 `comment.userName` —— 该字段后端不返回，界面永远走兜底。这条已经改掉（页面直接存 `CommentView` 行，`CommentList.vue` 从 `userId` 派生「用户 #ID」）。撤掉生成物之后这类错不会再被任何工具抓到，它只能靠两件事防住：动字段前读后端，交付前在浏览器里看它到底显示没显示。
 
 ---
 
