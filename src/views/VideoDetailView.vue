@@ -57,9 +57,13 @@
     <div class="comments card">
       <CommentList
         :comments="comments"
+        :total="commentPage.total"
+        :has-more="hasMoreComments"
+        :loading="commentLoading"
         :nickname="userStore.nickname"
         :avatar-url="userStore.avatarUrl"
         @submit="onComment"
+        @load-more="loadMoreComments"
       />
     </div>
   </div>
@@ -135,10 +139,31 @@ async function load(id) {
   }
 }
 
-async function loadComments(videoId) {
-  const page = await listComments(videoId, { current: 1, size: 50 })
-  // 直接存 CommentView：昵称头像不在返回里（CommentView.java 类注释），展示名由组件按 userId 现算
-  comments.value = page.records || []
+// 评论分页状态：只拉一页的话第 N 条评论永远看不到，所以这里维护页码并支持往下追加。
+// size 取 20 而不是原来的 50：后端每条顶层评论还会预取 3 条回复（CommentServiceImpl.PREVIEW_REPLIES），
+// 首屏 50 条等于一次拖回两百多条记录，而绝大多数视频根本翻不到第二页
+const COMMENT_PAGE_SIZE = 20
+const commentPage = ref({ current: 1, total: 0 })
+const commentLoading = ref(false)
+const hasMoreComments = computed(() => comments.value.length < commentPage.value.total)
+
+async function loadComments(videoId, { append = false } = {}) {
+  if (commentLoading.value) return
+  commentLoading.value = true
+  try {
+    const next = append ? commentPage.value.current + 1 : 1
+    const page = await listComments(videoId, { current: next, size: COMMENT_PAGE_SIZE })
+    // 直接存 CommentView：昵称头像不在返回里（CommentView.java 类注释），展示名由组件按 userId 现算
+    const records = page?.records || []
+    comments.value = append ? comments.value.concat(records) : records
+    commentPage.value = { current: next, total: page?.total || 0 }
+  } finally {
+    commentLoading.value = false
+  }
+}
+
+function loadMoreComments() {
+  loadComments(route.params.id, { append: true })
 }
 
 async function loadInteract(id) {
@@ -252,6 +277,8 @@ async function onComment(text) {
   }
   try {
     await createComment({ videoId: Number(route.params.id), content: text })
+    // 刻意回到第一页而不是追加下一页：列表按 id 倒序，刚发的这条就在首位，
+    // 追加加载反而看不见自己的评论
     await loadComments(route.params.id)
     ElMessage.success('评论已发布')
   } catch (e) {
@@ -269,6 +296,7 @@ watch(() => route.params.id, (id) => {
   if (id) {
     playUrl.value = ''
     comments.value = []
+    commentPage.value = { current: 1, total: 0 }
     recommends.value = []
     load(id)
   }

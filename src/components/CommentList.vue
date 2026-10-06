@@ -19,7 +19,7 @@
       </div>
     </div>
 
-    <div class="count">{{ comments.length }} 条评论</div>
+    <div class="count">{{ shownCount }} 条评论</div>
     <ul class="list">
       <li v-for="c in comments" :key="c.id">
         <el-avatar :size="34">{{ displayName(c).charAt(0) }}</el-avatar>
@@ -31,19 +31,29 @@
       </li>
       <li v-if="comments.length === 0" class="empty">暂无评论，快来抢沙发~</li>
     </ul>
+
+    <div v-if="hasMore" class="more">
+      <el-button :loading="loading" @click="emit('loadMore')">加载更多评论</el-button>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 
-defineProps({
+const props = defineProps({
   comments: { type: Array, default: () => [] },
+  // 后端分页里的 total（顶层评论总数）。不传时退回用已加载条数，别显示成 0
+  total: { type: Number, default: 0 },
+  hasMore: { type: Boolean, default: false },
+  loading: { type: Boolean, default: false },
   nickname: { type: String, default: '' },
   avatarUrl: { type: String, default: '' }
 })
-const emit = defineEmits(['submit'])
+const emit = defineEmits(['submit', 'loadMore'])
 const text = ref('')
+
+const shownCount = computed(() => props.total || props.comments.length)
 
 // CommentView 只有 userId，昵称头像后端刻意不给（CommentView.java 类注释）：
 // 逐条查用户会把一屏评论变成一屏远程调用，要显示真实昵称得先有批量查用户的接口。
@@ -111,5 +121,9 @@ function submit() {
   color: var(--vp-text-2);
   text-align: center;
   padding: 24px 0;
+}
+.more {
+  text-align: center;
+  padding: 16px 0 4px;
 }
 </style>
